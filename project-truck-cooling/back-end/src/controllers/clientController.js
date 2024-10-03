@@ -1,149 +1,215 @@
-const pool = require('../models/db');
+const pool = require('../models/db')
 
 // Create Client
 const createClient = async (req, res) => {
-  const { nama_client, alamat_client, provinsi, kabupaten_kota, kecamatan, kode_pos, no_hp, email, tgl_bergabung } = req.body;
-  try {
-    const emailCheck = await pool.query('SELECT * FROM Client WHERE email = $1', [email]);
-    
-    if (emailCheck.rows.length > 0) {
-      return res.status(409).json({ message: 'Email sudah terdaftar' });
-    }
+	const {
+		nama_client,
+		alamat_client,
+		provinsi,
+		kabupaten_kota,
+		kecamatan,
+		kode_pos,
+		no_hp,
+		email,
+		tgl_bergabung,
+	} = req.body
+	try {
+		const emailCheck = await pool.query(
+			'SELECT * FROM Client WHERE email = $1',
+			[email]
+		)
 
-    const result = await pool.query(
-      'INSERT INTO Client (nama_client, alamat_client, provinsi, kabupaten_kota, kecamatan, kode_pos, no_hp, email, tgl_bergabung) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-      [nama_client, alamat_client, provinsi, kabupaten_kota, kecamatan, kode_pos, no_hp, email, tgl_bergabung]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
+		if (emailCheck.rows.length > 0) {
+			return res.status(409).json({ message: 'Email sudah terdaftar' })
+		}
 
-// Get Client
+		const result = await pool.query(
+			'INSERT INTO Client (nama_client, alamat_client, provinsi, kabupaten_kota, kecamatan, kode_pos, no_hp, email, tgl_bergabung) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+			[
+				nama_client,
+				alamat_client,
+				provinsi,
+				kabupaten_kota,
+				kecamatan,
+				kode_pos,
+				no_hp,
+				email,
+				tgl_bergabung,
+			]
+		)
+		res.status(201).json(result.rows[0])
+	} catch (err) {
+		res.status(500).send(err.message)
+	}
+}
+
 const getClients = async (req, res) => {
-  const page = parseInt(req.query.page) || 1; 
-  const limit = parseInt(req.query.limit) || 10; 
-  const offset = (page - 1) * limit;
+	const page = parseInt(req.query.page) || 1
+	const limit = parseInt(req.query.limit) || 10
+	const offset = (page - 1) * limit
+	const searchTerm = req.query.search || ''
 
-  try {
-    const countResult = await pool.query('SELECT COUNT(*) FROM Client');
-    const totalClients = parseInt(countResult.rows[0].count);
+	try {
+		let countQuery = 'SELECT COUNT(*) FROM Client'
+		let selectQuery = 'SELECT * FROM Client'
+		const queryParams = []
 
-    const result = await pool.query(
-      'SELECT * FROM Client ORDER BY id_client LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
+		if (searchTerm) {
+			const searchCondition = `
+        WHERE 
+        LOWER(nama_client) LIKE LOWER($1) OR
+        LOWER(alamat_client) LIKE LOWER($1) OR
+        LOWER(no_hp) LIKE LOWER($1) OR
+        LOWER(email) LIKE LOWER($1)
+      `
+			countQuery += searchCondition
+			selectQuery += searchCondition
+			queryParams.push(`%${searchTerm}%`)
+		}
 
-    const totalPages = Math.ceil(totalClients / limit);
+		const countResult = await pool.query(countQuery, queryParams)
+		const totalClients = parseInt(countResult.rows[0].count)
 
-    res.status(200).json({
-      clients: result.rows,
-      currentPage: page,
-      totalPages: totalPages,
-      totalClients: totalClients,
-    });
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
+		selectQuery +=
+			' ORDER BY id_client LIMIT $' +
+			(queryParams.length + 1) +
+			' OFFSET $' +
+			(queryParams.length + 2)
+		queryParams.push(limit, offset)
+
+		const result = await pool.query(selectQuery, queryParams)
+
+		const totalPages = Math.ceil(totalClients / limit)
+
+		res.status(200).json({
+			clients: result.rows,
+			currentPage: page,
+			totalPages: totalPages,
+			totalClients: totalClients,
+		})
+	} catch (err) {
+		res.status(500).send(err.message)
+	}
+}
 
 //Detail Client
 const detailClients = async (req, res) => {
-  const { id } = req.params; 
-  try {
-    const result = await pool.query('SELECT * FROM Client WHERE id_client = $1', [id]);
-    
-    if (result.rows.length > 0) {
-      res.status(200).json(result.rows[0]);
-    } else {
-      res.status(404).json({ message: 'Client not found' });
-    }
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-};
+	const { id } = req.params
+	try {
+		const result = await pool.query(
+			'SELECT * FROM Client WHERE id_client = $1',
+			[id]
+		)
+
+		if (result.rows.length > 0) {
+			res.status(200).json(result.rows[0])
+		} else {
+			res.status(404).json({ message: 'Client not found' })
+		}
+	} catch (error) {
+		res.status(500).send(error.message)
+	}
+}
 
 // Update Client
 const updateClient = async (req, res) => {
-  const { id } = req.params;
-  const { nama_client, alamat_client, provinsi, kabupaten_kota, kecamatan, kode_pos, no_hp, email, tgl_bergabung } = req.body;
-  try {
-    const result = await pool.query(
-      'UPDATE Client SET nama_client=$1, alamat_client=$2, provinsi=$3, kabupaten_kota=$4, kecamatan=$5, kode_pos=$6, no_hp=$7, email=$8, tgl_bergabung=$9 WHERE id_client=$10 RETURNING *',
-      [nama_client, alamat_client, provinsi, kabupaten_kota, kecamatan, kode_pos, no_hp, email, tgl_bergabung, id]
-    );
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
+	const { id } = req.params
+	const {
+		nama_client,
+		alamat_client,
+		provinsi,
+		kabupaten_kota,
+		kecamatan,
+		kode_pos,
+		no_hp,
+		email,
+		tgl_bergabung,
+	} = req.body
+	try {
+		const result = await pool.query(
+			'UPDATE Client SET nama_client=$1, alamat_client=$2, provinsi=$3, kabupaten_kota=$4, kecamatan=$5, kode_pos=$6, no_hp=$7, email=$8, tgl_bergabung=$9 WHERE id_client=$10 RETURNING *',
+			[
+				nama_client,
+				alamat_client,
+				provinsi,
+				kabupaten_kota,
+				kecamatan,
+				kode_pos,
+				no_hp,
+				email,
+				tgl_bergabung,
+				id,
+			]
+		)
+		res.status(200).json(result.rows[0])
+	} catch (err) {
+		res.status(500).send(err.message)
+	}
+}
 
 // Delete Client
 const deleteClient = async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM Client WHERE id_client=$1', [id]);
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
+	const { id } = req.params
+	try {
+		await pool.query('DELETE FROM Client WHERE id_client=$1', [id])
+		res.status(204).send()
+	} catch (err) {
+		res.status(500).send(err.message)
+	}
+}
 
 // Suspend Client
 const suspendClient = async (req, res) => {
-  const { id } = req.query;
-  const clientId = parseInt(id, 10); 
+	const { id } = req.query
+	const clientId = parseInt(id, 10)
 
-  if (isNaN(clientId)) {
-    return res.status(400).json({ message: 'Invalid client ID' });
-  }
+	if (isNaN(clientId)) {
+		return res.status(400).json({ message: 'Invalid client ID' })
+	}
 
-  try {
-    const result = await pool.query(
-      'UPDATE Client SET status_akun=$1 WHERE id_client=$2 RETURNING *',
-      ['Suspend', clientId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Client not found' });
-    }
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
+	try {
+		const result = await pool.query(
+			'UPDATE Client SET status_akun=$1 WHERE id_client=$2 RETURNING *',
+			['Suspend', clientId]
+		)
+		if (result.rows.length === 0) {
+			return res.status(404).json({ message: 'Client not found' })
+		}
+		res.status(200).json(result.rows[0])
+	} catch (err) {
+		res.status(500).send(err.message)
+	}
+}
 
 // Restore Client
 const restoreClient = async (req, res) => {
-  const { id } = req.query;
-  const clientId = parseInt(id, 10); 
+	const { id } = req.query
+	const clientId = parseInt(id, 10)
 
-  if (isNaN(clientId)) {
-    return res.status(400).json({ message: 'Invalid client ID' });
-  }
+	if (isNaN(clientId)) {
+		return res.status(400).json({ message: 'Invalid client ID' })
+	}
 
-  try {
-    const result = await pool.query(
-      'UPDATE Client SET status_akun=$1 WHERE id_client=$2 RETURNING *',
-      ['Aktif', clientId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Client not found' });
-    }
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-};
-
-
+	try {
+		const result = await pool.query(
+			'UPDATE Client SET status_akun=$1 WHERE id_client=$2 RETURNING *',
+			['Aktif', clientId]
+		)
+		if (result.rows.length === 0) {
+			return res.status(404).json({ message: 'Client not found' })
+		}
+		res.status(200).json(result.rows[0])
+	} catch (err) {
+		res.status(500).send(err.message)
+	}
+}
 
 module.exports = {
-  createClient,
-  getClients,
-  detailClients,
-  updateClient,
-  deleteClient,
-  suspendClient,
-  restoreClient
-};
+	createClient,
+	getClients,
+	detailClients,
+	updateClient,
+	deleteClient,
+	suspendClient,
+	restoreClient,
+}

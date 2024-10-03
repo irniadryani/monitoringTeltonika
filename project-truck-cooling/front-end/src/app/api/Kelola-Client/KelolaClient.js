@@ -1,7 +1,7 @@
 import { Api } from '../../common/api'
 
-export const kelolaClientFn = async () => {
-	const response = await Api.get('/api/clients')
+export const kelolaClientFn = async ({ page, search }) => {
+	const response = await Api.get(`/api/clients?page=${page}&search=${search}`)
 	return response.data
 }
 

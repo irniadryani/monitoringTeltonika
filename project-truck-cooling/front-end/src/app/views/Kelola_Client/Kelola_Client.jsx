@@ -21,6 +21,7 @@ import {
 	ButtonGroup,
 	CircularProgress,
 	Pagination,
+	InputAdornment,
 } from '@mui/material'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -49,6 +50,7 @@ import Calendar from 'react-calendar'
 import 'react-calendar/dist/Calendar.css'
 import { useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import SearchIcon from '@mui/icons-material/Search'
 
 function createData(no, nama, alamat, nohp, email, tgl, status) {
 	return { no, nama, alamat, nohp, email, tgl, status }
@@ -139,6 +141,9 @@ export default function Kelola_Client() {
 	const [selectedDate, setSelectedDate] = useState(new Date())
 	const [clients, setClients] = useState([])
 	const [editingClient, setEditingClient] = useState(null)
+	const [page, setPage] = useState(1)
+	const [searchTerm, setSearchTerm] = useState('')
+	const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
 
 	const navigate = useNavigate()
 
@@ -148,9 +153,22 @@ export default function Kelola_Client() {
 		isLoading: loadingClient,
 		reset: resetClient,
 	} = useQuery({
-		queryKey: 'allClient',
-		queryFn: kelolaClientFn,
+		queryKey: ['allClient', page, debouncedSearchTerm],
+		queryFn: () => kelolaClientFn({ page, search: debouncedSearchTerm }),
+		keepPreviousData: true,
 	})
+
+	const handlePageChange = (event, newPage) => {
+		setPage(newPage)
+	}
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setDebouncedSearchTerm(searchTerm)
+		}, 500)
+
+		return () => clearTimeout(timer)
+	}, [searchTerm])
 
 	const {
 		data: dataSingleClient,
@@ -306,6 +324,7 @@ export default function Kelola_Client() {
 	const handleSuspendClient = async (id) => {
 		try {
 			const updatedClient = await suspendFn(id)
+			refetchClient()
 			handleClose()
 			console.log('Client suspended:', updatedClient)
 		} catch (error) {
@@ -316,6 +335,7 @@ export default function Kelola_Client() {
 	const handleRestoreClient = async (id) => {
 		try {
 			const updatedClient = await restoreFn(id)
+			refetchClient()
 			handleClose()
 			console.log('Client restore:', updatedClient)
 		} catch (error) {
@@ -360,6 +380,33 @@ export default function Kelola_Client() {
 			</H4>
 
 			<Stack spacing={2}>
+				<Stack
+					direction='row'
+					spacing={2}
+					justifyContent='space-between'
+					alignItems='center'
+				>
+					<Button
+						variant='contained'
+						color='success'
+						onClick={() => handleOpen('modal1')}
+					>
+						Tambah Client
+					</Button>
+					<TextField
+						placeholder='Cari client...'
+						value={searchTerm}
+						onChange={(e) => setSearchTerm(e.target.value)}
+						InputProps={{
+							startAdornment: (
+								<InputAdornment position='start'>
+									<SearchIcon />
+								</InputAdornment>
+							),
+						}}
+						sx={{ width: '300px' }}
+					/>
+				</Stack>
 				<form onSubmit={handleSubmit(addClient)}>
 					<Stack
 						direction='row'
@@ -369,13 +416,6 @@ export default function Kelola_Client() {
 							alignItems: 'baseline',
 						}}
 					>
-						<Button
-							variant='contained'
-							color='success'
-							onClick={() => handleOpen('modal1')}
-						>
-							Tambah Client
-						</Button>
 						<Modal
 							open={activeModal === 'modal1'}
 							onClose={handleClose}
@@ -772,7 +812,7 @@ export default function Kelola_Client() {
 											variant='contained'
 											color='success'
 											type='button'
-											onClick={handleClickEdit}
+											onClick={handleClick}
 										>
 											Simpan
 										</Button>
@@ -1985,7 +2025,13 @@ export default function Kelola_Client() {
 					</TableContainer>
 				</Stack>
 			</Stack>
-			<Pagination count={dataClient?.totalPages} shape='rounded' />
+			<Pagination
+				count={dataClient?.totalPages || 1}
+				page={page}
+				onChange={handlePageChange}
+				disabled={loadingClient}
+				sx={{ marginTop: 2, display: 'flex', justifyContent: 'center' }}
+			/>
 		</Container>
 	)
 }
