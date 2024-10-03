@@ -32,6 +32,7 @@ import DoNotDisturbOnIcon from '@mui/icons-material/DoNotDisturbOn'
 import {
 	kelolaClientFn,
 	singleClientFn,
+	updateClientFn,
 	insertClientFn,
 	suspendFn,
 	restoreFn,
@@ -43,7 +44,7 @@ import {
 } from '../../api/Lokasi/Lokasi'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { formatISO } from 'date-fns'
+import { format, formatISO } from 'date-fns'
 import Calendar from 'react-calendar'
 import 'react-calendar/dist/Calendar.css'
 import { useNavigate } from 'react-router-dom'
@@ -137,6 +138,7 @@ export default function Kelola_Client() {
 	const [inputValue, setinputvalue] = useState({ id: '', label: '' })
 	const [selectedDate, setSelectedDate] = useState(new Date())
 	const [clients, setClients] = useState([])
+	const [editingClient, setEditingClient] = useState(null)
 
 	const navigate = useNavigate()
 
@@ -160,14 +162,23 @@ export default function Kelola_Client() {
 		enabled: !!clientId,
 	})
 
-	const handleOpen = (modalName, id) => {
+	const handleOpen = async (modalName, id) => {
 		setClientId(id)
 		setActiveModal(modalName)
+		if (modalName === 'modal3' && id) {
+			try {
+				const clientData = await singleClientFn(id)
+				setEditingClient(clientData)
+			} catch (error) {
+				console.error('Failed to fetch client data:', error)
+			}
+		}
 	}
 
 	const handleClose = () => {
 		setActiveModal(null)
 		setClientId(null)
+		setEditingClient(null)
 	}
 
 	const {
@@ -200,14 +211,62 @@ export default function Kelola_Client() {
 		},
 	})
 
+	const handleUpdateClient = useMutation({
+		mutationFn: (data) => updateClientFn(clientId, data),
+		onMutate() {},
+		onSuccess: (res) => {
+			console.log(res)
+			refetchClient()
+			handleClose()
+			// Reset the form or clear the editingClient state
+			setEditingClient(null)
+		},
+		onError: (error) => {
+			console.error('Error updating client:', error)
+			// Handle error (e.g., show error message to user)
+		},
+	})
+
 	const addClient = async (data) => {
 		data.tgl_bergabung = formatISO(new Date(date))
 		data.status_akun = 'Aktif'
 		handleInsertClient.mutateAsync(data)
 	}
 
+	const updateClient = async (data) => {
+		// Ensure all required fields are present
+		const updatedData = {
+			id_client: editingClient.id_client,
+			nama_client: data.nama_client || editingClient.nama_client,
+			alamat_client: data.alamat_client || editingClient.alamat_client,
+			provinsi: data.provinsi || editingClient.provinsi,
+			kabupaten_kota: data.kabupaten_kota || editingClient.kabupaten_kota,
+			kecamatan: data.kecamatan || editingClient.kecamatan,
+			kode_pos: data.kode_pos || editingClient.kode_pos,
+			no_hp: data.no_hp || editingClient.no_hp,
+			email: data.email || editingClient.email,
+			tgl_bergabung: data.tgl_bergabung || editingClient.tgl_bergabung,
+			// Add any other fields that are part of the client data
+		}
+
+		handleUpdateClient.mutateAsync(updatedData)
+	}
+
+	const handleEditInputChange = (field, value) => {
+		setEditingClient((prevState) => ({
+			...prevState,
+			[field]: value,
+		}))
+	}
+
 	const handleClick = () => {
 		handleSubmit(addClient)()
+	}
+
+	const handleClickEdit = () => {
+		console.log('clicked edit')
+
+		handleSubmit(updateClient)()
 	}
 
 	const handleReset = () => {
@@ -264,15 +323,6 @@ export default function Kelola_Client() {
 		}
 	}
 
-	const formatDate = (dateString) => {
-		const date = new Date(dateString)
-		const day = String(date.getDate()).padStart(2, '0')
-		const month = date.toLocaleString('id-ID', { month: 'long' })
-		const year = date.getFullYear()
-
-		return `${day} ${month} ${year}`
-	}
-
 	// useEffect(() => {
 	//   if (dataClient?.clients) {
 	//     setValue("nama_client", dataClient.nama_client);
@@ -287,6 +337,14 @@ export default function Kelola_Client() {
 	//     setValue("tgl_bergabung", dataClient.tgl_bergabung);
 	//   }
 	// }, [dataClient, setValue]);
+
+	const formatDate = (dateString) => {
+		const date = new Date(dateString)
+		return format(date, 'yyyy-MM-dd')
+	}
+
+	console.log(editingClient)
+	console.log(activeModal)
 
 	return (
 		<Container>
@@ -324,396 +382,403 @@ export default function Kelola_Client() {
 							aria-labelledby='modal-modal-title'
 							aria-describedby='modal-modal-description'
 						>
-							<Box sx={style}>
-								<H4>Tambah Client</H4>
-								<Stack spacing={2}>
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											components='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
+							<form>
+								<Box sx={style}>
+									<H4>Tambah Client</H4>
+									<Stack spacing={2}>
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
 										>
-											Nama Klien
-										</Typography>
-
-										<TextField
-											label='Nama Klien'
-											variant='outlined'
-											sx={{ width: 500 }}
-											{...register('nama_client', {
-												required: true,
-											})}
-											error={!!errors.nama_client}
-											helperText={
-												errors.nama_client
-													? 'Nama Klien diperlukan'
-													: ''
-											}
-										/>
-									</Stack>
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											components='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
-										>
-											Alamat
-										</Typography>
-
-										<TextField
-											label='Alamat'
-											variant='outlined'
-											sx={{ width: 500 }}
-											{...register('alamat_client', {
-												required: true,
-											})}
-											error={!!errors.nama_client}
-											helperText={
-												errors.nama_client
-													? 'Nama Klien diperlukan'
-													: ''
-											}
-										/>
-									</Stack>
-
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											component='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
-										>
-											Provinsi
-										</Typography>
-
-										{loadingProvinsi ? (
-											<CircularProgress />
-										) : (
-											<Autocomplete
-												sx={{ width: 500 }}
-												options={dataProvinsi}
-												getOptionLabel={(option) =>
-													option.provinsi
-												}
-												value={provinsi}
-												onChange={(e, newValue) =>
-													setProvinsi(newValue)
-												}
-												renderInput={(params) => (
-													<TextField
-														{...params}
-														label='Provinsi'
-														variant='outlined'
-														error={!provinsi}
-														helperText={
-															!provinsi
-																? 'Provinsi diperlukan'
-																: ''
-														}
-														{...register(
-															'provinsi',
-															{ required: true }
-														)}
-													/>
-												)}
-											/>
-										)}
-									</Stack>
-
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											components='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
-										>
-											Kabupaten/Kota
-										</Typography>
-
-										{loadingKabupatenKota ? (
-											<CircularProgress />
-										) : (
-											<Autocomplete
-												sx={{ width: 500 }}
-												options={dataKabupatenKota}
-												getOptionLabel={(option) =>
-													option.kabupaten_kota
-												}
-												value={kota}
-												onChange={(e, newValue) =>
-													setKota(newValue)
-												}
-												renderInput={(params) => (
-													<TextField
-														{...params}
-														label='Kabupaten/Kota'
-														variant='outlined'
-														error={!kota}
-														helperText={
-															!kota
-																? 'Kabupaten/Kota diperlukan'
-																: ''
-														}
-														{...register(
-															'kabupaten_kota',
-															{ required: true }
-														)}
-													/>
-												)}
-											/>
-										)}
-									</Stack>
-
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											component='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
-										>
-											Kecamatan
-										</Typography>
-
-										{loadingKecamatan ? (
-											<CircularProgress />
-										) : (
-											<Autocomplete
-												sx={{ width: 500 }}
-												options={dataKecamatan}
-												getOptionLabel={(option) =>
-													option.kecamatan
-												}
-												value={kecamatan}
-												onChange={(e, newValue) => {
-													setKecamatan(newValue)
-													if (
-														typeof newValue ===
-														'string'
-													) {
-														setKecamatan({
-															label: newValue,
-														})
-													}
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												components='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
 												}}
-												freeSolo
-												renderInput={(params) => (
-													<TextField
-														{...params}
-														label='Kecamatan'
-														variant='outlined'
-														error={!kecamatan}
-														helperText={
-															!kecamatan
-																? 'Kecamatan diperlukan'
-																: ''
-														}
-														{...register(
-															'kecamatan',
-															{ required: true }
-														)}
-													/>
-												)}
+											>
+												Nama Klien
+											</Typography>
+
+											<TextField
+												label='Nama Klien'
+												variant='outlined'
+												sx={{ width: 500 }}
+												{...register('nama_client', {
+													required: true,
+												})}
+												error={!!errors.nama_client}
+												helperText={
+													errors.nama_client
+														? 'Nama Klien diperlukan'
+														: ''
+												}
 											/>
-										)}
-									</Stack>
+										</Stack>
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												components='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Alamat
+											</Typography>
 
+											<TextField
+												label='Alamat'
+												variant='outlined'
+												sx={{ width: 500 }}
+												{...register('alamat_client', {
+													required: true,
+												})}
+												error={!!errors.nama_client}
+												helperText={
+													errors.nama_client
+														? 'Nama Klien diperlukan'
+														: ''
+												}
+											/>
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												component='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Provinsi
+											</Typography>
+
+											{loadingProvinsi ? (
+												<CircularProgress />
+											) : (
+												<Autocomplete
+													sx={{ width: 500 }}
+													options={dataProvinsi}
+													getOptionLabel={(option) =>
+														option.provinsi
+													}
+													value={provinsi}
+													onChange={(e, newValue) =>
+														setProvinsi(newValue)
+													}
+													renderInput={(params) => (
+														<TextField
+															{...params}
+															label='Provinsi'
+															variant='outlined'
+															error={!provinsi}
+															helperText={
+																!provinsi
+																	? 'Provinsi diperlukan'
+																	: ''
+															}
+															{...register(
+																'provinsi',
+																{
+																	required: true,
+																}
+															)}
+														/>
+													)}
+												/>
+											)}
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												components='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Kabupaten/Kota
+											</Typography>
+
+											{loadingKabupatenKota ? (
+												<CircularProgress />
+											) : (
+												<Autocomplete
+													sx={{ width: 500 }}
+													options={dataKabupatenKota}
+													getOptionLabel={(option) =>
+														option.kabupaten_kota
+													}
+													value={kota}
+													onChange={(e, newValue) =>
+														setKota(newValue)
+													}
+													renderInput={(params) => (
+														<TextField
+															{...params}
+															label='Kabupaten/Kota'
+															variant='outlined'
+															error={!kota}
+															helperText={
+																!kota
+																	? 'Kabupaten/Kota diperlukan'
+																	: ''
+															}
+															{...register(
+																'kabupaten_kota',
+																{
+																	required: true,
+																}
+															)}
+														/>
+													)}
+												/>
+											)}
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												component='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Kecamatan
+											</Typography>
+
+											{loadingKecamatan ? (
+												<CircularProgress />
+											) : (
+												<Autocomplete
+													sx={{ width: 500 }}
+													options={dataKecamatan}
+													getOptionLabel={(option) =>
+														option.kecamatan
+													}
+													value={kecamatan}
+													onChange={(e, newValue) => {
+														setKecamatan(newValue)
+														if (
+															typeof newValue ===
+															'string'
+														) {
+															setKecamatan({
+																label: newValue,
+															})
+														}
+													}}
+													freeSolo
+													renderInput={(params) => (
+														<TextField
+															{...params}
+															label='Kecamatan'
+															variant='outlined'
+															error={!kecamatan}
+															helperText={
+																!kecamatan
+																	? 'Kecamatan diperlukan'
+																	: ''
+															}
+															{...register(
+																'kecamatan',
+																{
+																	required: true,
+																}
+															)}
+														/>
+													)}
+												/>
+											)}
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												components='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Kode Pos
+											</Typography>
+
+											<TextField
+												label='Kode Pos'
+												variant='outlined'
+												sx={{ width: 500 }}
+												{...register('kode_pos', {
+													required: true,
+												})}
+												error={!!errors.kode_pos}
+												helperText={
+													errors.kode_pos
+														? 'Kode Pos diperlukan'
+														: ''
+												}
+											/>
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												components='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Nomor Kontak
+											</Typography>
+
+											<TextField
+												label='Nomor Kontak'
+												variant='outlined'
+												sx={{ width: 500 }}
+												{...register('no_hp', {
+													required: true,
+												})}
+												error={!!errors.no_hp}
+												helperText={
+													errors.no_hp
+														? 'Nomor Kontak diperlukan'
+														: ''
+												}
+											/>
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												components='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Email
+											</Typography>
+
+											<TextField
+												label='Email'
+												variant='outlined'
+												sx={{ width: 500 }}
+												{...register('email', {
+													required: true,
+												})}
+												error={!!errors.email}
+												helperText={
+													errors.email
+														? 'Email diperlukan'
+														: ''
+												}
+											/>
+										</Stack>
+
+										<Stack
+											direction='row'
+											spacing={2}
+											alignItems='center'
+										>
+											<Typography
+												id='modal-modal-title'
+												variant='h6'
+												component='h6'
+												sx={{
+													minWidth: '150px',
+													fontSize: '1rem',
+												}}
+											>
+												Tanggal Bergabung
+											</Typography>
+
+											<TextField
+												label='Tanggal Bergabung'
+												type='date'
+												defaultValue={date}
+												onChange={(e) =>
+													setDate(e.target.value)
+												}
+												InputLabelProps={{
+													shrink: true,
+												}}
+												sx={{ width: 500 }}
+												{...register('tgl_bergabung', {
+													required: true,
+												})}
+											/>
+										</Stack>
+									</Stack>
 									<Stack
 										direction='row'
-										spacing={2}
-										alignItems='center'
+										spacing={12}
+										sx={{
+											justifyContent: 'center',
+											alignItems: 'center',
+											marginTop: 5,
+										}}
 									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											components='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
+										<Button
+											variant='contained'
+											color='error'
+											onClick={handleReset}
 										>
-											Kode Pos
-										</Typography>
-
-										<TextField
-											label='Kode Pos'
-											variant='outlined'
-											sx={{ width: 500 }}
-											{...register('kode_pos', {
-												required: true,
-											})}
-											error={!!errors.kode_pos}
-											helperText={
-												errors.kode_pos
-													? 'Kode Pos diperlukan'
-													: ''
-											}
-										/>
-									</Stack>
-
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											components='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
+											Reset
+										</Button>
+										<Button
+											variant='contained'
+											color='success'
+											type='button'
+											onClick={handleClickEdit}
 										>
-											Nomor Kontak
-										</Typography>
-
-										<TextField
-											label='Nomor Kontak'
-											variant='outlined'
-											sx={{ width: 500 }}
-											{...register('no_hp', {
-												required: true,
-											})}
-											error={!!errors.no_hp}
-											helperText={
-												errors.no_hp
-													? 'Nomor Kontak diperlukan'
-													: ''
-											}
-										/>
+											Simpan
+										</Button>
 									</Stack>
-
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											components='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
-										>
-											Email
-										</Typography>
-
-										<TextField
-											label='Email'
-											variant='outlined'
-											sx={{ width: 500 }}
-											{...register('email', {
-												required: true,
-											})}
-											error={!!errors.email}
-											helperText={
-												errors.email
-													? 'Email diperlukan'
-													: ''
-											}
-										/>
-									</Stack>
-
-									<Stack
-										direction='row'
-										spacing={2}
-										alignItems='center'
-									>
-										<Typography
-											id='modal-modal-title'
-											variant='h6'
-											component='h6'
-											sx={{
-												minWidth: '150px',
-												fontSize: '1rem',
-											}}
-										>
-											Tanggal Bergabung
-										</Typography>
-
-										<TextField
-											label='Tanggal Bergabung'
-											type='date'
-											defaultValue={date}
-											onChange={(e) =>
-												setDate(e.target.value)
-											}
-											InputLabelProps={{
-												shrink: true,
-											}}
-											sx={{ width: 500 }}
-											{...register('tgl_bergabung', {
-												required: true,
-											})}
-										/>
-									</Stack>
-								</Stack>
-								<Stack
-									direction='row'
-									spacing={12}
-									sx={{
-										justifyContent: 'center',
-										alignItems: 'center',
-										marginTop: 5,
-									}}
-								>
-									<Button
-										variant='contained'
-										color='error'
-										onClick={handleReset}
-									>
-										Reset
-									</Button>
-									<Button
-										variant='contained'
-										color='success'
-										type='submit'
-										typeof='submit'
-										onClick={handleClick}
-									>
-										Simpan
-									</Button>
-								</Stack>
-							</Box>
+								</Box>
+							</form>
 						</Modal>
 					</Stack>
 				</form>
@@ -1183,9 +1248,9 @@ export default function Kelola_Client() {
 
 																	<TextField
 																		label='Tanggal Bergabung'
-																		value={
+																		value={formatDate(
 																			dataSingleClient.tgl_bergabung
-																		}
+																		)}
 																		InputProps={{
 																			readOnly: true,
 																		}}
@@ -1202,7 +1267,10 @@ export default function Kelola_Client() {
 													color='warning'
 													sx={{ flex: 1 }}
 													onClick={() =>
-														handleOpen('modal3')
+														handleOpen(
+															'modal3',
+															row.id_client
+														)
 													}
 												>
 													<EditIcon />
@@ -1217,348 +1285,464 @@ export default function Kelola_Client() {
 												>
 													<Box sx={style}>
 														<H4>Edit Client</H4>
-														<Stack spacing={2}>
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
+														{editingClient && (
+															<Stack spacing={2}>
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
 																>
-																	Nama Klien
-																</Typography>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Nama
+																		Klien
+																	</Typography>
 
-																<TextField
-																	label='Nama Klien'
-																	variant='outlined'
-																	sx={{
-																		width: 500,
-																	}}
-																/>
-															</Stack>
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Alamat
-																</Typography>
-
-																<TextField
-																	label='Alamat'
-																	variant='outlined'
-																	sx={{
-																		width: 500,
-																	}}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Provinsi
-																</Typography>
-
-																<Autocomplete
-																	sx={{
-																		width: 500,
-																	}}
-																	options={
-																		data_provinsi
-																	}
-																	getOptionLabel={(
-																		option
-																	) =>
-																		option.label
-																	}
-																	value={
-																		provinsi
-																	}
-																	onChange={(
-																		e,
-																		newValue
-																	) =>
-																		setProvinsi(
-																			newValue
-																		)
-																	}
-																	renderInput={(
-																		params
-																	) => (
-																		<TextField
-																			{...params}
-																			label='Provinsi'
-																			variant='outlined'
-																		/>
-																	)}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Kabupaten/Kota
-																</Typography>
-
-																<Autocomplete
-																	sx={{
-																		width: 500,
-																	}}
-																	options={
-																		data_kota
-																	}
-																	getOptionLabel={(
-																		option
-																	) =>
-																		option.label
-																	}
-																	value={kota}
-																	onChange={(
-																		e,
-																		newValue
-																	) =>
-																		setKota(
-																			newValue
-																		)
-																	}
-																	renderInput={(
-																		params
-																	) => (
-																		<TextField
-																			{...params}
-																			label='Kabupaten/Kota'
-																			variant='outlined'
-																		/>
-																	)}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Kecamatan
-																</Typography>
-
-																<Autocomplete
-																	sx={{
-																		width: 500,
-																	}}
-																	options={
-																		data_kec
-																	}
-																	getOptionLabel={(
-																		option
-																	) =>
-																		option.label
-																	}
-																	value={
-																		kecamatan
-																	}
-																	onChange={(
-																		e,
-																		newValue
-																	) =>
-																		setKecamatan(
-																			newValue
-																		)
-																	}
-																	renderInput={(
-																		params
-																	) => (
-																		<TextField
-																			{...params}
-																			label='Kecamatan'
-																			variant='outlined'
-																		/>
-																	)}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Kode Pos
-																</Typography>
-
-																<TextField
-																	label='Kode Pos'
-																	variant='outlined'
-																	sx={{
-																		width: 500,
-																	}}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Nomor Kontak
-																</Typography>
-
-																<TextField
-																	label='Nomor Kontak'
-																	variant='outlined'
-																	sx={{
-																		width: 500,
-																	}}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Email
-																</Typography>
-
-																<TextField
-																	label='Email'
-																	variant='outlined'
-																	sx={{
-																		width: 500,
-																	}}
-																/>
-															</Stack>
-
-															<Stack
-																direction='row'
-																spacing={2}
-																alignItems='center'
-															>
-																<Typography
-																	id='modal-modal-title'
-																	variant='h6'
-																	components='h6'
-																	sx={{
-																		minWidth:
-																			'150px',
-																		fontSize:
-																			'1rem',
-																	}}
-																>
-																	Tanggal
-																	Bergabung
-																</Typography>
-
-																<TextField
-																	label='Tanggal Bergabung'
-																	type='date'
-																	value={date}
-																	onChange={(
-																		e
-																	) =>
-																		setDate(
+																	<TextField
+																		label='Nama Klien'
+																		value={
+																			editingClient.nama_client
+																		}
+																		onChange={(
 																			e
-																				.target
-																				.value
-																		)
-																	}
-																	InputLabelProps={{
-																		shrink: true,
-																	}}
-																	sx={{
-																		width: 500,
-																	}}
-																/>
+																		) =>
+																			handleEditInputChange(
+																				'nama_client',
+																				e
+																					.target
+																					.value
+																			)
+																		}
+																		variant='outlined'
+																		sx={{
+																			width: 500,
+																		}}
+																	/>
+																</Stack>
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Alamat
+																	</Typography>
+
+																	<TextField
+																		label='Alamat'
+																		value={
+																			editingClient.alamat_client
+																		}
+																		onChange={(
+																			e
+																		) =>
+																			handleEditInputChange(
+																				'alamat_client',
+																				e
+																					.target
+																					.value
+																			)
+																		}
+																		variant='outlined'
+																		sx={{
+																			width: 500,
+																		}}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Provinsi
+																	</Typography>
+
+																	<Autocomplete
+																		sx={{
+																			width: 500,
+																		}}
+																		options={
+																			dataProvinsi ||
+																			[]
+																		}
+																		getOptionLabel={(
+																			option
+																		) =>
+																			option.provinsi
+																		}
+																		value={
+																			dataProvinsi?.find(
+																				(
+																					p
+																				) =>
+																					p.provinsi ===
+																					editingClient.provinsi
+																			) ||
+																			null
+																		}
+																		onChange={(
+																			e,
+																			newValue
+																		) =>
+																			setEditingClient(
+																				{
+																					...editingClient,
+																					provinsi:
+																						newValue?.provinsi ||
+																						'',
+																				}
+																			)
+																		}
+																		renderInput={(
+																			params
+																		) => (
+																			<TextField
+																				{...params}
+																				label='Provinsi'
+																				variant='outlined'
+																			/>
+																		)}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Kabupaten/Kota
+																	</Typography>
+
+																	<Autocomplete
+																		sx={{
+																			width: 500,
+																		}}
+																		options={
+																			dataKabupatenKota ||
+																			[]
+																		}
+																		getOptionLabel={(
+																			option
+																		) =>
+																			option.kabupaten_kota
+																		}
+																		value={
+																			dataKabupatenKota?.find(
+																				(
+																					k
+																				) =>
+																					k.kabupaten_kota ===
+																					editingClient.kabupaten_kota
+																			) ||
+																			null
+																		}
+																		onChange={(
+																			e,
+																			newValue
+																		) =>
+																			setEditingClient(
+																				{
+																					...editingClient,
+																					kabupaten_kota:
+																						newValue?.kabupaten_kota ||
+																						'',
+																				}
+																			)
+																		}
+																		renderInput={(
+																			params
+																		) => (
+																			<TextField
+																				{...params}
+																				label='Kabupaten/Kota'
+																				variant='outlined'
+																			/>
+																		)}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Kecamatan
+																	</Typography>
+
+																	<Autocomplete
+																		sx={{
+																			width: 500,
+																		}}
+																		options={
+																			dataKecamatan ||
+																			[]
+																		}
+																		getOptionLabel={(
+																			option
+																		) =>
+																			option.kecamatan
+																		}
+																		value={
+																			dataKecamatan?.find(
+																				(
+																					k
+																				) =>
+																					k.kecamatan ===
+																					editingClient.kecamatan
+																			) ||
+																			null
+																		}
+																		onChange={(
+																			e,
+																			newValue
+																		) =>
+																			setEditingClient(
+																				{
+																					...editingClient,
+																					kecamatan:
+																						newValue?.kecamatan ||
+																						'',
+																				}
+																			)
+																		}
+																		renderInput={(
+																			params
+																		) => (
+																			<TextField
+																				{...params}
+																				label='Kecamatan'
+																				variant='outlined'
+																			/>
+																		)}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Kode Pos
+																	</Typography>
+
+																	<TextField
+																		label='Kode Pos'
+																		value={
+																			editingClient.kode_pos
+																		}
+																		onChange={(
+																			e
+																		) =>
+																			handleEditInputChange(
+																				'kode_pos',
+																				e
+																					.target
+																					.value
+																			)
+																		}
+																		variant='outlined'
+																		sx={{
+																			width: 500,
+																		}}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Nomor
+																		Kontak
+																	</Typography>
+
+																	<TextField
+																		label='Nomor Kontak'
+																		value={
+																			editingClient.no_hp
+																		}
+																		onChange={(
+																			e
+																		) =>
+																			handleEditInputChange(
+																				'no_hp',
+																				e
+																					.target
+																					.value
+																			)
+																		}
+																		variant='outlined'
+																		sx={{
+																			width: 500,
+																		}}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Email
+																	</Typography>
+
+																	<TextField
+																		label='Email'
+																		value={
+																			editingClient.email
+																		}
+																		onChange={(
+																			e
+																		) =>
+																			handleEditInputChange(
+																				'email',
+																				e
+																					.target
+																					.value
+																			)
+																		}
+																		variant='outlined'
+																		sx={{
+																			width: 500,
+																		}}
+																	/>
+																</Stack>
+
+																<Stack
+																	direction='row'
+																	spacing={2}
+																	alignItems='center'
+																>
+																	<Typography
+																		id='modal-modal-title'
+																		variant='h6'
+																		components='h6'
+																		sx={{
+																			minWidth:
+																				'150px',
+																			fontSize:
+																				'1rem',
+																		}}
+																	>
+																		Tanggal
+																		Bergabung
+																	</Typography>
+
+																	<TextField
+																		label='Tanggal Bergabung'
+																		type='date'
+																		value={formatDate(
+																			editingClient.tgl_bergabung
+																		)}
+																		onChange={(
+																			e
+																		) =>
+																			setEditingClient(
+																				{
+																					...editingClient,
+																					tgl_bergabung:
+																						e
+																							.target
+																							.value,
+																				}
+																			)
+																		}
+																		InputLabelProps={{
+																			shrink: true,
+																		}}
+																		sx={{
+																			width: 500,
+																		}}
+																	/>
+																</Stack>
 															</Stack>
-														</Stack>
+														)}
 														<Stack
 															direction='row'
 															spacing={12}
@@ -1579,6 +1763,13 @@ export default function Kelola_Client() {
 															<Button
 																variant='contained'
 																color='success'
+																type='submit'
+																typeof='submit'
+																onClick={() =>
+																	updateClient(
+																		editingClient
+																	)
+																}
 															>
 																Simpan
 															</Button>
